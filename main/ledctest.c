@@ -1,5 +1,5 @@
 /********* timertest *******
- * Example This example code is软件定时器 .
+ * Example ledctest软件定时器 .
 */
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
@@ -9,18 +9,29 @@
 #include "freertos/queue.h"
 #include "sdkconfig.h"
 #include "driver/timer.h"
+#include "driver/ledc.h"
 #include "esp_timer.h"
-static const char *TAG = "tmiertest";
+static const char *TAG = "ledctest";
 
 /**
  * 摘要
- * 使用软件定时，2个：1个单次运行的定时器，1个周期运行的定时器
- * 
- * 
+ * 使用PWM控制器来输出PWM波（占空比）调节LED灯亮度，
+ * 2路PWM输出的管脚呼吸闪烁，从俺到亮，之后又渐变暗，不断循环交替
+ * fade 渐变/淡入/淡出/褪色
  ************/
-//声明2个定时器的回调函数
-void test_timer_periodic_cb(void *arg);//周期定时回调函数
-void test_timer_once_cb(void *arg);//一次定时回调函数
+//相关参数宏定义
+#define LEDC_TOTAL_NUM  2//控制组总数量
+
+
+#define LEDC_HS_TIMER LEDC_TIMER_0//使用定时器0
+#define LEDC_HS_MODE  LEDC_HIGH_SPEED_MODE //定时器模式
+#define LEDC_HS_CH0_GPIO  GPIO_NUM_18 //LED0 接到18端口
+#define LEDC_HS_CH0_CHANNEL LEDC_CHANNEL_0  // 将18定义到CHANNEL0端口上， 
+#define LEDC_HS_CH1_GPIO  GPIO_NUM_19 //LED0 接到19端口
+#define LEDC_HS_CH1_CHANNEL LEDC_CHANNEL_1  // 将19定义到CHANNEL1端口上， 
+
+#define LEDC_TEST_DUTY  8000      
+#define LEDC_TEST_FADE_TIME 3000
 
 //定义两个定时器句柄
 esp_timer_handle_t test_p_handle = 0 ;
