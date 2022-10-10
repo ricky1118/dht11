@@ -24,77 +24,82 @@ static const char *TAG = "ledctest";
 
 
 #define LEDC_HS_TIMER LEDC_TIMER_0//使用定时器0
-#define LEDC_HS_MODE  LEDC_HIGH_SPEED_MODE //定时器模式
-#define LEDC_HS_CH0_GPIO  GPIO_NUM_18 //LED0 接到18端口
-#define LEDC_HS_CH0_CHANNEL LEDC_CHANNEL_0  // 将18定义到CHANNEL0端口上， 
-#define LEDC_HS_CH1_GPIO  GPIO_NUM_19 //LED0 接到19端口
-#define LEDC_HS_CH1_CHANNEL LEDC_CHANNEL_1  // 将19定义到CHANNEL1端口上， 
+#define LEDC_HS_MODE   LEDC_LOW_SPEED_MODE //定时器模式,只有低速模式没有高速模式
+#define LEDC_HS_CH0_GPIO  GPIO_NUM_17 //LED0 接到17端口
+#define LEDC_HS_CH0_CHANNEL LEDC_CHANNEL_0  // 将17定义到CHANNEL0端口上， 
+#define LEDC_HS_CH1_GPIO  GPIO_NUM_18 //LED0 接到18端口
+#define LEDC_HS_CH1_CHANNEL LEDC_CHANNEL_1  // 将18定义到CHANNEL1端口上， 
 
 #define LEDC_TEST_DUTY  8000      
 #define LEDC_TEST_FADE_TIME 3000
+ ledc_channel_config_t ledc_channel[LEDC_TOTAL_NUM];
+//LEDC 初始化
+static void ledc_init(){
+         //定义定时器结构体，并完成初始化赋值
+    ledc_timer_config_t ledc_timer = {
+        .duty_resolution = LEDC_TIMER_13_BIT,//频率占空比的分辨率，即占空比的最小值这里是13位分辨率2^13  1/8192
+        .freq_hz = 5000,//设置PWM频率
+        .speed_mode = LEDC_HS_MODE,//设置定时器为低速模式，S3没有高速模式
+        .timer_num = LEDC_HS_TIMER//悬着使用定时器0
 
-//定义两个定时器句柄
-esp_timer_handle_t test_p_handle = 0 ;
-esp_timer_handle_t test_o_handle = 0 ;
+    };
+    ledc_timer_config(&ledc_timer);
 
-//定义一个单次运行的定时器结构体
-esp_timer_create_args_t test_once_arg = {
-                                            .callback = &test_timer_once_cb,//设置回调函数
-                                            .arg = NULL,//不带参数
-                                            .name ="TestOnceTimer"//
-                                            };
-//定义一个周期重复运行的定时器结构体
-esp_timer_create_args_t test_period_arg ={
-                                            .callback = &test_timer_periodic_cb,
-                                            .arg = NULL,
-                                            .name = "TestPeriodicTimer"
-                                        };
+    //配置所有通道结构体并赋值，
+    ledc_channel_config_t ledc_channel[LEDC_TOTAL_NUM] = {
+        {
+            .channel = LEDC_HS_CH0_CHANNEL,
+            .duty = 0,
+            .gpio_num =LEDC_HS_CH0_GPIO,
+            .speed_mode = LEDC_HS_MODE,
+            .timer_sel = LEDC_HS_TIMER
+        },
+        {
+            .channel = LEDC_HS_CH1_CHANNEL,
+            .duty = 0,
+            .gpio_num = LEDC_HS_CH1_GPIO,
+            .speed_mode = LEDC_HS_MODE,
+            .timer_sel = LEDC_HS_TIMER
+        },
 
-void test_timer_periodic_cb(void *arg){
-        int64_t tick = esp_timer_get_time();
-        ESP_LOGI(TAG,"方法回调名字：%s,距离定时器开启时间间隔 =%lld \r\n",test_period_arg.name,tick);
+    };
+    //遍历并使能       用预先准备好的配置设置led控制器( Set LED Controller with previously prepared configuration)
+    int ch;
+    for(ch =0;ch<LEDC_TOTAL_NUM;ch++){
 
-        if(tick >100000000){
-            //停止定时器工作，并获取是否停止成功
-            esp_err_t err = esp_timer_stop(test_p_handle);
-            ESP_LOGI(TAG,"要停止的定时器名称：%s,是否停止成功：%s",test_period_arg.name,err == ESP_OK ? "OK!\r\n" : "failed!\r\n");
-            err = esp_timer_delete(test_p_handle);
-            ESP_LOGI(TAG,"要删除定时器名字：%s,是否删除成功：%s",test_period_arg.name,err ==ESP_OK ? "OK!\r\n" : "failed!\r\n");
-
-        }
-         // 低电平
-         gpio_set_level(GPIO_NUM_16,0);
-         vTaskDelay(1000 / portTICK_PERIOD_MS);
-         //高电平
-         gpio_set_level(GPIO_NUM_16,1);
-         vTaskDelay(1000/portTICK_PERIOD_MS);
-}
-void test_timer_once_cb(void *arg) {
-
-	int64_t tick = esp_timer_get_time();
-
-	ESP_LOGI(TAG,"方法回调名字: %s , 距离定时器开启时间间隔 = %lld \r\n", test_once_arg.name, tick);
-
-	esp_err_t err = esp_timer_delete(test_o_handle);
-	ESP_LOGI(TAG,"要删除的定时器名字：%s , 是否删除成功：%s", test_once_arg.name,err == ESP_OK ? "ok!\r\n" : "failed!\r\n");
+        ledc_channel_config(&ledc_channel[ch]);
+    }
 }
 
 /***********************************************/
 void app_main(void)
 {
-    esp_timer_init();// 使用定时器API函数，先调用接口初始化,(未调用此函数时，使用不受影响，不知为何)：原因：只需要再启动代码中调用此函数，使用其它esp_timer API不需要调用此函数
+   ledc_init();
+   
+   ledc_fade_func_install(0);//初始化渐变服务安装，即安装LEDC渐变功能
+   int ch;
+   uint flag = 0;
+   while (1)
+   {
+    ESP_LOGI(TAG,"1.逐渐变大的周期目标 = %d\n",LEDC_TEST_DUTY);
+    for(ch = 0; ch<LEDC_TOTAL_NUM;ch++){
+        //设置渐变功能和时间  
+        ledc_set_fade_with_time(ledc_channel[ch].speed_mode,ledc_channel[ch].channel,LEDC_TEST_DUTY,LEDC_TEST_FADE_TIME);
+        //渐变开始
+        ledc_fade_start(ledc_channel[ch].speed_mode,ledc_channel[ch].channel,LEDC_FADE_NO_WAIT);
+    }
+    vTaskDelay(LEDC_TEST_FADE_TIME / portTICK_PERIOD_MS);
 
-    gpio_pad_select_gpio(GPIO_NUM_16);
-    gpio_set_direction(GPIO_NUM_16,GPIO_MODE_OUTPUT);
+      ESP_LOGI(TAG,"1.逐渐变小的周期目标 = %d\n",flag);
+    for(ch = 0; ch<LEDC_TOTAL_NUM;ch++){
+        //设置渐变功能和时间  
+        ledc_set_fade_with_time(ledc_channel[ch].speed_mode,ledc_channel[ch].channel,0,LEDC_TEST_FADE_TIME);
+        //渐变开始
+        ledc_fade_start(ledc_channel[ch].speed_mode,ledc_channel[ch].channel,LEDC_FADE_NO_WAIT);
+    }
+    vTaskDelay(LEDC_TEST_FADE_TIME / portTICK_PERIOD_MS);
 
-    //开始创建一个周期定时器并且执行
-    esp_err_t err = esp_timer_create(&test_period_arg,&test_p_handle);
-    err = esp_timer_start_periodic(test_p_handle,1000*1000);
-    ESP_LOGI(TAG,"重复周期运行定时器创建状态码：%s",err == ESP_OK ? "OK!\r\n" : "failed!\r\n");
-    //开创一个单词周期定时器并且执行
-
-    err = esp_timer_create(&test_once_arg,&test_o_handle);
-    err = esp_timer_start_once(test_o_handle,10*1000*1000);
-    ESP_LOGI(TAG,"单次运行定时器创建状态码：%s",err == ESP_OK ? "OK!\r\n" : "failed!\r\n");
+   }
+   
    
 }
