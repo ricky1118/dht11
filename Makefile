@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := timertest
+PROJECT_NAME := dht11
 
 EXTRA_COMPONENT_DIRS = $(IDF_PATH)/examples/common_components/led_strip
 
